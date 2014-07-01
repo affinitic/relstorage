@@ -80,7 +80,7 @@ history_preserving_schema = """
     mysql:
         CREATE TABLE new_oid (
             zoid        BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE SEQUENCE zoid_seq;
@@ -221,7 +221,7 @@ history_preserving_schema = """
             tid         BIGINT NOT NULL,
             to_zoid     BIGINT NOT NULL,
             PRIMARY KEY (tid, zoid, to_zoid)
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE object_ref (
@@ -246,7 +246,7 @@ history_preserving_schema = """
     mysql:
         CREATE TABLE object_refs_added (
             tid         BIGINT NOT NULL PRIMARY KEY
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE object_refs_added (
@@ -278,7 +278,7 @@ history_preserving_schema = """
             keep        BOOLEAN NOT NULL,
             keep_tid    BIGINT NOT NULL,
             visited     BOOLEAN NOT NULL DEFAULT FALSE
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
         CREATE INDEX pack_object_keep_zoid ON pack_object (keep, zoid);
 
     oracle:
@@ -305,7 +305,7 @@ history_preserving_schema = """
             tid         BIGINT NOT NULL,
             zoid        BIGINT NOT NULL,
             PRIMARY KEY (tid, zoid)
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE pack_state (
@@ -325,7 +325,7 @@ history_preserving_schema = """
     mysql:
         CREATE TABLE pack_state_tid (
             tid         BIGINT NOT NULL PRIMARY KEY
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE pack_state_tid (
@@ -512,7 +512,7 @@ history_free_schema = """
     mysql:
         CREATE TABLE new_oid (
             zoid        BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE SEQUENCE zoid_seq;
@@ -606,7 +606,7 @@ history_free_schema = """
             to_zoid     BIGINT NOT NULL,
             tid         BIGINT NOT NULL,
             PRIMARY KEY (zoid, to_zoid)
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE object_ref (
@@ -629,7 +629,7 @@ history_free_schema = """
         CREATE TABLE object_refs_added (
             zoid        BIGINT NOT NULL PRIMARY KEY,
             tid         BIGINT NOT NULL
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
 
     oracle:
         CREATE TABLE object_refs_added (
@@ -661,7 +661,7 @@ history_free_schema = """
             keep        BOOLEAN NOT NULL,
             keep_tid    BIGINT NOT NULL,
             visited     BOOLEAN NOT NULL DEFAULT FALSE
-        ) ENGINE = MyISAM;
+        ) ENGINE = InnoDB;
         CREATE INDEX pack_object_keep_zoid ON pack_object (keep, zoid);
 
     oracle:
