@@ -62,11 +62,7 @@ class MySQLOIDAllocator(object):
         old_autocommit_value = cursor.connection.get_autocommit()
         cursor.connection.autocommit(True)
         stmt = "INSERT INTO new_oid VALUES ()"
-        try:
-           cursor.execute(stmt)
-        except:
-           print "FAIL" * 50
-           cursor.execute(stmt)
+        cursor.execute(stmt)
         n = cursor.connection.insert_id()
         cursor.connection.autocommit(old_autocommit_value)
         if n % 100 == 0:
