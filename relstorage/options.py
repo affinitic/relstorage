@@ -117,7 +117,11 @@ class Options(object):
 
         for key, value in kwoptions.items():
             if not hasattr(self, key):
-                raise TypeError("Unknown parameter: %s" % key)
+                raise TypeError("Unknown parameter: %s (Known: %s)" % (
+                    key,
+                    self.valid_option_names()
+                ))
+
             setattr(self, key, value)
 
     @classmethod
@@ -136,8 +140,11 @@ class Options(object):
     @classmethod
     def valid_option_names(cls):
         # Still include poll_interval so we can warn
-        return ['poll_interval'] + [x for x in vars(cls)
-                                    if not callable(getattr(cls, x)) and not x.startswith('_')]
+        return sorted(
+            x
+            for x in vars(cls)
+            if not callable(getattr(cls, x)) and not x.startswith('_')
+        ) + ['poll_interval']
 
     def __repr__(self):
         return 'relstorage.options.Options(**' + repr(self.__dict__) + ')'

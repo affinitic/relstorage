@@ -17,6 +17,7 @@ from __future__ import absolute_import
 from ZODB.DB import DB
 from ZODB.POSException import ReadConflictError
 from ZODB.serialize import referencesf
+from ZODB.utils import u64 as bytes8_to_int64
 from ZODB.tests import BasicStorage
 from ZODB.tests import ConflictResolution
 from ZODB.tests import MTStorage
@@ -127,7 +128,7 @@ class RelStorageTestBase(StorageCreatingMixin,
 
     _storage = property(get_storage, set_storage)
 
-    def open(self, read_only=False):
+    def open(self, read_only=False, **kwargs):
         # This is used by a few ZODB tests that close and reopen the storage.
         storage = self._storage
         if storage is not None:
@@ -135,7 +136,7 @@ class RelStorageTestBase(StorageCreatingMixin,
             storage.close()
             storage.cleanup()
         self._storage = storage = self.make_storage(
-            read_only=read_only, zap=False)
+            read_only=read_only, zap=False, **kwargs)
         return storage
 
 
@@ -354,8 +355,13 @@ class GenericRelStorageTests(
         oid1 = b'\0' * 7 + b'\x0f'
         self._dostoreNP(oid1, data=data)
         oid2 = self._storage.new_oid()
-        self.assertTrue(oid1 < oid2, 'old OID %r should be less than new OID %r'
-                        % (oid1, oid2))
+        oid1_int = bytes8_to_int64(oid1)
+        oid2_int = bytes8_to_int64(oid2)
+        self.assertGreater(
+            oid2_int, oid1_int,
+            'old OID %r (%d) should be less than new OID %r (%d)'
+            % (oid1, oid1_int, oid2, oid2_int))
+
 
     def checkUseCache(self):
         # Store an object, cache it, then retrieve it from the cache

@@ -23,6 +23,7 @@ from relstorage._compat import db_binary_to_bytes
 from ZODB.POSException import StorageError
 from zope.interface import implementer
 
+logger = __import__('logging').getLogger(__name__)
 
 @implementer(ISchemaInstaller)
 class MySQLSchemaInstaller(AbstractSchemaInstaller):
@@ -52,27 +53,36 @@ class MySQLSchemaInstaller(AbstractSchemaInstaller):
             return self._to_native_str(name)
 
     def list_tables(self, cursor):
-        cursor.execute("SHOW TABLES")
-        return [self._to_native_str(name)
-                for (name,) in cursor.fetchall()]
+        return list(self.__list_tables_and_engines(cursor))
+
+    def __list_tables_and_engines(self, cursor):
+        # {table_name: engine}, all in lower case.
+        cursor.execute('SHOW TABLE STATUS')
+        native = self._metadata_to_native_str
+        result = {
+            native(row['name']): native(row['engine']).lower()
+            for row in self._rows_as_dicts(cursor)
+        }
+        return result
+
+    def __list_tables_not_innodb(self, cursor):
+        return {
+            k: v
+            for k, v in self.__list_tables_and_engines(cursor).items()
+            if k in self.all_tables and v != 'innodb'
+        }
 
     def list_sequences(self, cursor):
         return []
 
     def check_compatibility(self, cursor, tables):
         super(MySQLSchemaInstaller, self).check_compatibility(cursor, tables)
-        stmt = "SHOW TABLE STATUS LIKE 'object_state'"
-        cursor.execute(stmt)
-        for row in cursor:
-            for col_index, col in enumerate(cursor.description):
-                if col[0].lower() == 'engine':
-                    engine = row[col_index]
-                    if not isinstance(engine, str):
-                        engine = engine.decode('ascii')
-                    if engine.lower() != 'innodb':
-                        raise StorageError(
-                            "The object_state table must use the InnoDB "
-                            "engine, but it is using the %s engine." % engine)
+        tables_that_are_not_innodb = self.__list_tables_not_innodb(cursor)
+        if tables_that_are_not_innodb:
+            raise StorageError(
+                "All RelStorage tables should be InnoDB; MyISAM is no longer supported. "
+                "These tables are not using InnoDB: %r" % (tables_that_are_not_innodb,)
+            )
 
     def _create_commit_lock(self, cursor):
         return
@@ -98,8 +108,8 @@ class MySQLSchemaInstaller(AbstractSchemaInstaller):
     def _create_new_oid(self, cursor):
         stmt = """
         CREATE TABLE new_oid (
-            zoid        BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT
-        ) ENGINE = MyISAM;
+            zoid        {oid_type} NOT NULL PRIMARY KEY AUTO_INCREMENT
+        ) {transactional_suffix};
         """
         self.runner.run_script(cursor, stmt)
 
@@ -125,5 +135,19 @@ class MySQLSchemaInstaller(AbstractSchemaInstaller):
             self.runner.run_script(cursor, stmt)
 
     def _reset_oid(self, cursor):
-        stmt = "TRUNCATE new_oid;"
-        self.runner.run_script(cursor, stmt)
+        from .oidallocator import MySQLOIDAllocator
+        MySQLOIDAllocator().reset_oid(cursor)
+
+    def __convert_all_tables_to_innodb(self, cursor):
+        tables = self.__list_tables_not_innodb(cursor)
+        logger.info("Converting tables to InnoDB: %s", tables)
+        for table in tables:
+            logger.info("Converting table %s to Innodb", table)
+            cursor.execute("ALTER TABLE %s ENGINE=Innodb" % (table,))
+        logger.info("Done converting tables to InnoDB: %s", tables)
+
+    def _prepare_with_connection(self, conn, cursor):
+        from .oidallocator import MySQLOIDAllocator
+        self.__convert_all_tables_to_innodb(cursor)
+        super(MySQLSchemaInstaller, self)._prepare_with_connection(conn, cursor)
+        MySQLOIDAllocator().garbage_collect_oids(cursor)

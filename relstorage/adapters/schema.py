@@ -17,6 +17,7 @@ Database schema installers
 import abc
 import six
 
+from collections import namedtuple
 import logging
 from functools import partial
 
@@ -29,12 +30,23 @@ tmpl_property = partial(query_property,
                         property_suffix='_TMPLS',
                         lazy_suffix='_TMPL')
 
+ResultDescription = namedtuple(
+    'ResultDescription',
+    # First two are mandatory, remaining five may be None
+    # Example:
+    # ('Name', 253, 17, 192, 192, 0, 0),
+    ('name', 'type_code', 'display_size',
+     'internal_size', 'precision', 'scale', 'null_ok'))
 
 
 @six.add_metaclass(abc.ABCMeta)
 class AbstractSchemaInstaller(object):
 
     # Keep this list in the same order as the schema scripts
+    # These must be lower case, and all queries we write must
+    # use lower case table names (MySQL has weird casing rules,
+    # but this is also how we do comparisons in Python on table metadata.)
+
     all_tables = (
         'commit_lock',
         'pack_lock',
@@ -53,6 +65,11 @@ class AbstractSchemaInstaller(object):
         'temp_pack_visit',
         'temp_undo',
     )
+    #: The type of the column used to hold transaction IDs
+    #: and object IDs (64-bit integers).
+    COLTYPE_OID_TID = 'BIGINT'
+    #: The type of the column used to hold binary strings.
+    #: Our default is appropriate for PostgreSQL.
     COLTYPE_BINARY_STRING = 'BYTEA'
     COLTYPE_STATE = COLTYPE_BINARY_STRING
     #: The type of the column used to number blob chunks.
@@ -77,6 +94,46 @@ class AbstractSchemaInstaller(object):
             state_type=self.COLTYPE_STATE,
             transactional_suffix=self.TRANSACTIONAL_TABLE_SUFFIX,
         )
+
+    def _metadata_to_native_str(self, value):
+        # Some drivers, in some configurations, notably older versions
+        # of MySQLdb (mysqlclient) on Python 3 in 'NAMES binary' mode,
+        # can return column names and the like as bytes when we want native str.
+        # pg8000 on Python2 does the reverse and returns unicode when we want
+        # native str.
+        if value is not None and not isinstance(value, str):
+            # Checking for bytes tells us that it's a unicode object on Python 2;
+            # we won't get here if it's bytes (because bytes is str)
+            value = value.decode('ascii') if isinstance(value, bytes) else value.encode('ascii"')
+        return value
+
+    def _column_descriptions(self, cursor):
+        __traceback_info__ = cursor.description
+        return [ResultDescription(self._metadata_to_native_str(r[0]),
+                                  # Not all drivers return lists or tuples
+                                  # or things that can be sliced; psycopg2/cffi returns
+                                  # an arbitrary sequence.
+                                  # MySqlConnector-Python has been observed to provide
+                                  # extra attributes.
+                                  *list(r)[1:7])
+                for r in cursor.description]
+
+    def _rows_as_dicts(self, cursor):
+        """
+        An iterator of the rows as dictionaries, named by the
+        lower-case column name.
+        Some drivers offer the ability to do this directly when
+        the statement is executed or the cursor is created;
+        this is a lowest-common denominator way to do it utilizing
+        DB-API 2.0 attributes.
+        """
+        column_descrs = self._column_descriptions(cursor)
+        for row in cursor:
+            result = {
+                column_descr.name.lower(): column_value
+                for column_descr, column_value in zip(column_descrs, row)
+            }
+            yield result
 
     @abc.abstractmethod
     def list_tables(self, cursor):
@@ -407,7 +464,6 @@ class AbstractSchemaInstaller(object):
         self.check_compatibility(cursor, tables)
 
     def prepare(self):
-        """Create the database schema if it does not already exist."""
         # XXX: We can generalize this to handle triggers, procs, etc,
         # to make subclasses have easier time.
         def callback(_conn, cursor):
@@ -418,6 +474,13 @@ class AbstractSchemaInstaller(object):
                 self.check_compatibility(cursor, tables)
                 self.update_schema(cursor, tables)
         self.connmanager.open_and_call(callback)
+
+    def verify(self):
+        self.connmanager.open_and_call(self._verify)
+
+    def _verify(self, conn, cursor): # pylint:disable=unused-argument
+        tables = self.list_tables(cursor)
+        self.check_compatibility(cursor, tables)
 
     def check_compatibility(self, cursor, tables): # pylint:disable=unused-argument
         if self.keep_history:

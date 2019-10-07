@@ -217,10 +217,14 @@ class RelStorage(UndoLogCompatible,
 
         self._is_read_only = options.read_only
 
+        need_check_compat = create is None
         if create is None:
             create = options.create_schema
         if create:
             self._adapter.schema.prepare()
+        elif need_check_compat:
+            # At the top level, not new_instance(), and not asked to create.
+            self._adapter.schema.verify()
 
         # A ZODB Connection is documented as not being thread-safe and
         # must be used only by a single thread at a time. In IMVCC,
@@ -991,6 +995,9 @@ class RelStorage(UndoLogCompatible,
         self._batcher.flush()
 
         # Reserve all OIDs used by this transaction
+        # TODO: Is this really necessary in the common case? Maybe just in the
+        # restore case or the copyTransactionsFrom case? Testing shows that the common case
+        # never makes this True.
         if self._max_stored_oid > self._max_new_oid:
             self._adapter.oidallocator.set_min_oid(
                 cursor, self._max_stored_oid + 1)
