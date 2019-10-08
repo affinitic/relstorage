@@ -51,14 +51,20 @@ class MySQLOIDAllocator(object):
     def set_min_oid(self, cursor, oid):
         """Ensure the next OID is at least the given OID."""
         n = (oid + 15) // 16
+        old_autocommit_value = cursor.connection.get_autocommit()
+        cursor.connection.autocommit(True)
         cursor.execute("REPLACE INTO new_oid VALUES(%s)", (n,))
+        cursor.connection.autocommit(old_autocommit_value)
 
     @metricmethod
     def new_oids(self, cursor):
         """Return a sequence of new, unused OIDs."""
+        old_autocommit_value = cursor.connection.get_autocommit()
+        cursor.connection.autocommit(True)
         stmt = "INSERT INTO new_oid VALUES ()"
         cursor.execute(stmt)
         n = cursor.connection.insert_id()
+        cursor.connection.autocommit(old_autocommit_value)
         if n % 100 == 0:
             # Clean out previously generated OIDs.
             stmt = "DELETE FROM new_oid WHERE zoid < %s"

@@ -87,7 +87,7 @@ setup(
     ],
     tests_require=tests_require,
     extras_require={
-        'mysql': ['MySQL-python>=1.2.2'],
+        'mysql': ['mysqlclient>=1.3.7'],
         'postgresql': ['psycopg2>=2.0'],
         'oracle': ['cx_Oracle>=4.3.1'],
         'test': tests_require,
