@@ -443,7 +443,7 @@ class ObjectMover(object):
             prev_tid    BIGINT UNSIGNED NOT NULL,
             md5         CHAR(32),
             state       LONGBLOB
-        ) ENGINE MyISAM
+        ) ENGINE InnoDB
         """
         cursor.execute(stmt)
 
@@ -453,7 +453,7 @@ class ObjectMover(object):
             chunk_num   BIGINT UNSIGNED NOT NULL,
                         PRIMARY KEY (zoid, chunk_num),
             chunk       LONGBLOB
-        ) ENGINE MyISAM
+        ) ENGINE InnoDB
         """
         cursor.execute(stmt)
 
